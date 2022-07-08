@@ -4,6 +4,8 @@ from .models import Conference, Location, State
 from common.json import ModelEncoder
 import json
 
+from .acls import get_photo, get_weather_data
+
 
 class ConferenceListEncoder(ModelEncoder):
     model = Conference
@@ -36,7 +38,7 @@ def api_list_conferences(request):
             {"conferences": conferences},
             encoder=ConferenceListEncoder,
         )
-    else:
+    else:  # POST
         content = json.loads(request.body)
         try:
             location = Location.objects.get(id=content["location"])
@@ -68,6 +70,7 @@ class LocationDetailEncoder(ModelEncoder):
         "room_count",
         "created",
         "updated",
+        "picture_url",
     ]
 
     def get_extra_data(self, o):
@@ -120,8 +123,16 @@ def api_show_conference(request, pk):
     """
     if request.method == "GET":
         conference = Conference.objects.get(id=pk)
+        weather = get_weather_data(
+            conference.location.city,
+            conference.location.state.abbreviation,
+        )
+
         return JsonResponse(
-            conference,
+            {
+                "weather": weather,
+                "conference": conference,
+            },
             encoder=ConferenceDetailEncoder,
             safe=False,
         )
@@ -182,6 +193,8 @@ def api_list_locations(request):
         )
     else:  # POST
         content = json.loads(request.body)
+        photo = get_photo(content["city"], content["state"])
+        content.update(photo)
         try:
             state = State.objects.get(abbreviation=content["state"])
             content["state"] = state
@@ -190,6 +203,7 @@ def api_list_locations(request):
                 {"message": "Invalid state abbreviation"},
                 status=400,
             )
+
         location = Location.objects.create(**content)
         return JsonResponse(
             location,
